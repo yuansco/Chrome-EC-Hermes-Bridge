@@ -1,9 +1,10 @@
 # Chrome-EC Hermes Bridge API
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com)
-[![Python](https://img.shields.io/badge/Python-3.8+-3776AB.svg?style=flat&logo=Python&logoColor=white)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blueviolet.svg?style=flat)](https://modelcontextprotocol.io)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=Python&logoColor=white)](https://www.python.org/)
 
-**Chrome-EC Hermes Bridge API** 是一個基於 FastAPI 的輕量級橋接伺服器，旨在提供標準化 HTTP REST API 介面，供外部系統或運行於 **Docker 容器中的 AI Agent（如 Hermes）** 調用 ChromiumOS 宿主機環境的 Chrome-EC 開發工具鏈（包含 `cros_sdk`、`zmake` 編譯、`flash_ec` 燒錄、`repo sync` 同步及受白名單保護的 Git 操作）。
+**Chrome-EC Hermes Bridge API** 是一個基於 FastAPI 的輕量級橋接伺服器，旨在提供標準化 HTTP REST API 及 **MCP (Model Context Protocol)** 介面，供外部系統或運行於 **Docker 容器中的 AI Agent（如 Hermes）** 調用 ChromiumOS 宿主機環境的 Chrome-EC 開發工具鏈（包含 `cros_sdk`、`zmake` 編譯、`flash_ec` 燒錄、`repo sync` 同步及受白名單保護的 Git 操作）。
 
 ---
 
@@ -23,6 +24,7 @@
   - [7. EC 韌體燒錄 (POST /api/v1/flash/ec)](#7-ec-韌體燒錄-post-apiv1flashec)
   - [8. Servo / DUT 控制 (POST /api/v1/servo/dut-control)](#8-servo--dut-控制-post-apiv1servodut-control)
 - [Docker 內 Python 呼叫範例代碼](#docker-內-python-呼叫範例代碼)
+- [MCP (Model Context Protocol) 介面](#mcp-model-context-protocol-介面)
 - [安全性與 Git 白名單機制](#安全性與-git-白名單機制)
 - [常見問題與除錯 (FAQ)](#常見問題與除錯-faq)
 
@@ -47,7 +49,7 @@ yuan ALL=(ALL:ALL) NOPASSWD: ALL
 
 ## 系統架構與預設路徑
 
-本服務預設監聽於 `0.0.0.0:8000`，並操作宿主機上的以下目錄：
+本服務預設監聽於 `0.0.0.0:8000`，同時提供 REST API 與 MCP 雙介面，並操作宿主機上的以下目錄：
 
 | 變數名稱 | 預設路徑 | 說明 |
 | :--- | :--- | :--- |
@@ -57,6 +59,7 @@ yuan ALL=(ALL:ALL) NOPASSWD: ALL
 FastAPI 自動生成的互動式文件：
 - **Swagger UI**: `http://host.docker.internal:8000/docs`（或從宿主機瀏覽器開啟 `http://localhost:8000/docs`）
 - **ReDoc**: `http://host.docker.internal:8000/redoc`
+- **MCP 端點**: `http://host.docker.internal:8000/mcp`（詳見 [Hermes MCP 整合指南](hermes_mcp_integration_guide.md)）
 
 ---
 
@@ -725,6 +728,51 @@ if __name__ == "__main__":
         flash_res = client.flash_ec(board="bluey")
         print("Flash result:", flash_res["stdout"])
 ```
+
+---
+
+## MCP (Model Context Protocol) 介面
+
+自 v1.3.0 起，Bridge Server 同時提供 **MCP 介面**，讓支援 MCP 的 AI Agent 能以標準化協議自動發現並呼叫所有工具，無需手動撰寫 HTTP Client。
+
+### MCP 端點
+
+| 項目 | 值 |
+| :--- | :--- |
+| MCP URL (Docker 內) | `http://host.docker.internal:8000/mcp` |
+| MCP URL (宿主機本地) | `http://localhost:8000/mcp` |
+| 傳輸方式 | Streamable HTTP |
+| 支援 Tools 數量 | 8 個（與 REST API 完全對應） |
+
+### REST API vs MCP 對照
+
+| REST API | MCP Tool |
+| :--- | :--- |
+| `GET /health` | `health_check` |
+| `GET /api/v1/endpoints` | `list_endpoints` |
+| `POST /api/v1/build/ec` | `build_ec` |
+| `POST /api/v1/repo/checkout` | `repo_checkout` |
+| `POST /api/v1/repo/sync` | `repo_sync` |
+| `POST /api/v1/git/command` | `git_command` |
+| `POST /api/v1/flash/ec` | `flash_ec` |
+| `POST /api/v1/servo/dut-control` | `dut_control` |
+
+### Hermes Agent 快速設定
+
+在 Hermes Agent 的 MCP 設定檔中加入：
+
+```json
+{
+  "mcpServers": {
+    "chrome-ec-bridge": {
+      "url": "http://host.docker.internal:8000/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+> 📖 **完整 MCP 整合指南（含 Python Client 範例、Docker 設定、所有 Tool 參數說明）請參閱：[hermes_mcp_integration_guide.md](hermes_mcp_integration_guide.md)**
 
 ---
 

@@ -7,7 +7,7 @@ cd "$SCRIPT_DIR"
 
 VENV_DIR="$SCRIPT_DIR/venv"
 REQUIREMENTS_FILE="$SCRIPT_DIR/requirements.txt"
-REQUIRED_PKGS=("fastapi" "uvicorn" "pydantic")
+REQUIRED_PKGS=("fastapi" "uvicorn" "pydantic" "mcp")
 
 echo "=========================================="
 echo "  Chrome-EC Hermes Bridge Server Startup  "
@@ -64,4 +64,7 @@ fi
 
 # 6. 啟動伺服器
 echo "[INFO] 正在啟動伺服器: $TARGET_SERVER (監聽 http://0.0.0.0:8000)..."
+echo "[INFO]   REST API : http://0.0.0.0:8000/api/v1/"
+echo "[INFO]   Swagger  : http://0.0.0.0:8000/docs"
+echo "[INFO]   MCP      : http://0.0.0.0:8000/mcp"
 exec python "$SCRIPT_DIR/$TARGET_SERVER" "$@"

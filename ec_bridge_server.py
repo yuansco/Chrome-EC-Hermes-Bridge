@@ -4,10 +4,31 @@ import shutil
 import subprocess
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
-app = FastAPI(title="Chrome-EC Hermes Bridge API", version="1.2.0")
+app = FastAPI(title="Chrome-EC Hermes Bridge API", version="1.3.0")
+
+# 允許 Docker 容器透過 host.docker.internal 連線（避免 421 Misdirected Request）
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1", "host.docker.internal", "*"],
+)
+
+# === 掛載 MCP (Model Context Protocol) Server ===
+try:
+    from ec_bridge_mcp import mcp as mcp_server
+    # SSE transport: 內部路由為 /sse 和 /messages
+    # 掛載於 /mcp → 實際端點: /mcp/sse, /mcp/messages
+    app.mount("/mcp", mcp_server.sse_app())
+    _mcp_enabled = True
+except ImportError:
+    _mcp_enabled = False
+    print("[WARN] mcp 套件未安裝，MCP 介面已停用。請執行: pip install 'mcp[cli]'")
+except Exception as e:
+    _mcp_enabled = False
+    print(f"[WARN] MCP 掛載失敗: {e}")
 
 # 目錄設定
 CHROMIUMOS_DIR = os.path.expanduser("~/chromiumos")
@@ -264,4 +285,14 @@ def health_check():
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("==========================================")
+    print("  Chrome-EC Hermes Bridge Server v1.3.0  ")
+    print("==========================================")
+    print(f"  REST API : http://0.0.0.0:8000/api/v1/")
+    print(f"  Swagger  : http://0.0.0.0:8000/docs")
+    if _mcp_enabled:
+        print(f"  MCP(SSE) : http://0.0.0.0:8000/mcp/sse")
+    else:
+        print(f"  MCP      : DISABLED (mcp package not installed)")
+    print("==========================================")
+    uvicorn.run(app, host="0.0.0.0", port=8000, forwarded_allow_ips="*")
